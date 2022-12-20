@@ -9,7 +9,7 @@ mod snake;
 mod config;
 
 enum ThreadMsg {
-    SnakeDied,
+    ResetLastKey,
     Quit,
 }
 
@@ -55,7 +55,7 @@ fn main() {
         loop {
             match msg_rx.try_recv() {
                 Ok(msg) => match msg {
-                    ThreadMsg::SnakeDied => last_key = KeyCode::Null,
+                    ThreadMsg::ResetLastKey => last_key = KeyCode::Null,
                     ThreadMsg::Quit => break,
                 },
                 Err(_) => {},
@@ -80,9 +80,9 @@ fn main() {
         snake.reset();
         cursor_move(0, 0);
         clear();
-    
+
         println!("{}", snake);
-    
+
         let msg = "Press press a movement key to begin";
         cursor_move(((config.board_width * 2 + 2) / 2 - msg.len().min(config.board_width) / 2 - 2) as u16, (config.board_height / 2 + 2) as u16);
         print!("{}", msg);
@@ -122,7 +122,7 @@ fn main() {
         loop {
             if snake.dead() {
                 println!("You died!");
-                msg_tx.send(ThreadMsg::SnakeDied).unwrap();
+                msg_tx.send(ThreadMsg::ResetLastKey).unwrap();
                 std::thread::sleep(std::time::Duration::from_millis(2500));
                 break;
             }
@@ -134,6 +134,10 @@ fn main() {
                     KeyCode::Left | KeyCode::Char('a') => snake.set_dir(Direction::Left, true),
                     KeyCode::Right | KeyCode::Char('d') => snake.set_dir(Direction::Right, true),
                     KeyCode::Esc => break 'outer,
+                    KeyCode::Char(' ') => {
+                        msg_tx.send(ThreadMsg::ResetLastKey).unwrap();
+                        pause(&key_rx);
+                    }
                     _ => {}
                 }
             }
@@ -149,6 +153,14 @@ fn main() {
     msg_tx.send(ThreadMsg::Quit).unwrap();
     input_thread.join().unwrap();
     std::io::stdout().execute(cursor::Show).unwrap();
+}
+
+fn pause(input: &mpsc::Receiver<KeyCode>) {
+    loop {
+        if let KeyCode::Char(' ') = input.recv().expect("Failed to recieve input") {
+            break;
+        }
+    }
 }
 
 fn clear() {
